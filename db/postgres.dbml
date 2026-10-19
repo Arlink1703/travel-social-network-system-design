@@ -1,0 +1,110 @@
+
+Table users {
+  id integer [primary key]
+  name varchar(255)
+  last_name varchar(255)
+  nick_name varchar(255)
+  tag varchar(255) [unique]
+  email varchar(320) [unique]
+  phone_num varchar(12) [unique]
+  created_at timestamp
+
+}
+
+Table locations {
+  id integer [primary key]
+  name varchar(255)
+  full_name varchar(255)
+  coordinates point
+  match_radius_m integer
+
+  indexes {
+    coordinates [type: gist]
+  }
+}
+
+Table blog_posts {
+  id integer [primary key]
+  user_id integer [not null]
+  text text
+  images_url text
+  coordinates point
+  geohash varchar(12)
+  location_id integer
+  location_title varchar(255)
+  comments_num integer
+  reactions jsonb
+  created_at timestamp
+
+  indexes {
+    coordinates [type: gist]
+    geohash
+    (location_id, created_at)
+  }
+}
+
+Table comments {
+  id integer [primary key]
+  post_id integer [not null]
+  parent_comment_id integer
+  user_id integer [not null]
+  text text
+  created_at timestamp
+
+  indexes {
+    (post_id, created_at)
+    parent_comment_id
+  }
+}
+
+Table post_reactions {
+  post_id integer
+  user_id integer
+  reaction_type varchar(25)
+  created_at timestamp
+
+  indexes {
+    (post_id, user_id) [pk]
+    (post_id, created_at)
+  }
+}
+
+Table comment_reactions {
+  comment_id integer
+  user_id integer
+  reaction_type varchar(25)
+  created_at timestamp
+
+  indexes {
+    (comment_id, user_id) [pk]
+  }
+}
+
+Table followers {
+  followee_id integer
+  follower_id integer
+  created_at timestamp
+
+  indexes {
+    (followee_id, follower_id) [pk]
+    (follower_id, created_at)
+  }
+}
+
+// ---------------- RELATIONS ----------------
+
+Ref: blog_posts.user_id > users.id
+Ref: blog_posts.location_id > locations.id
+
+Ref: comments.post_id > blog_posts.id
+Ref: comments.parent_comment_id > comments.id
+Ref: comments.user_id > users.id
+
+Ref: post_reactions.post_id > blog_posts.id
+Ref: post_reactions.user_id > users.id
+
+Ref: comment_reactions.comment_id > comments.id
+Ref: comment_reactions.user_id > users.id
+
+Ref: followers.followee_id > users.id
+Ref: followers.follower_id > users.id

@@ -1,0 +1,34 @@
+Project redis {
+  database_type: 'Redis'
+  Note: 'Cache layer for counters: comments, reactions, followers.'
+}
+
+Table post_comments_counter {
+  post_id integer [primary key]
+  comments_num integer
+}
+
+Table post_reactions_counter {
+  post_id integer
+  reaction_type varchar(25)
+  reactions_num integer
+
+  indexes {
+    (post_id, reaction_type) [pk]
+  }
+}
+
+Table comment_reactions_counter {
+  comment_id integer
+  reaction_type varchar(25)
+  reactions_num integer
+
+  indexes {
+    (comment_id, reaction_type) [pk]
+  }
+}
+
+Table user_followers_counter {
+  user_id integer [primary key]
+  followers_num integer
+}
