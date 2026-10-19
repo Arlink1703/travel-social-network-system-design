@@ -1,0 +1,17 @@
+@startuml c4-context
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+title C4 Level 1 — Travel Social Network
+
+Person(traveler, "Traveler", "Publishes travel posts with photos and location, reads the global and following feeds, reacts and comments, follows other travelers, searches for popular places")
+
+System(travelNetwork, "Travel Social Network", "Photo posts with geotagging, reverse-chronological following feed, reactions and comments, subscriptions, popular places search")
+
+System_Ext(cdn, "CDN", "Serves previews and photos to end users, offloads 95% of media traffic")
+
+Rel(traveler, travelNetwork, "Publishes posts, reads the feed, reacts and comments, manages subscriptions, searches places", "HTTPS / JSON")
+Rel(traveler, cdn, "Downloads previews and photos", "HTTPS")
+Rel(travelNetwork, cdn, "Serves originals and renditions on cache miss", "HTTPS")
+
+SHOW_LEGEND()
+@enduml

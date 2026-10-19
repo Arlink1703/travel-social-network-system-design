@@ -1,0 +1,79 @@
+@startuml c4-container
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title C4 Level 2 — Travel Social Network
+
+Person(traveler, "Traveler", "Publishes posts, reads the feed, reacts and comments, manages subscriptions, searches places")
+
+System_Ext(cdn, "CDN", "Serves previews and photos, offloads 95% of media traffic")
+
+System_Boundary(c1, "Travel Social Network") {
+
+    Container(mobile, "Mobile app", "iOS / Android", "Photo posts, feed, reactions, comments, subscriptions, places search")
+    Container(web, "Web app", "SPA, browser", "Same scenarios in the browser")
+
+    Container(lb, "Load Balancer", "L4/L7", "TLS termination, distributes requests across API Gateway instances, ~1M concurrent connections")
+    Container(gateway, "API Gateway", "REST / JSON", "Single entry point, JWT validation, routing, rate limiting")
+
+    Container(authService, "Auth service", "REST API", "Sign-up, sign-in, token issuing and refresh")
+    Container(publicationsService, "Publications service", "REST API", "Posts, comments, reactions, popular places and posts by place")
+    Container(subsService, "Subscriptions service", "REST API", "Subscriptions and followers, provides an author's follower list")
+    Container(feedService, "Feed service", "REST API", "Serves the global and following feeds, cursor-paginated")
+    Container(feedWorker, "Feed fan-out worker", "Consumer", "Fan-out on write: pushes a new post id into followers' feeds")
+    Container(mediaService, "Media service", "REST API", "Issues presigned upload URLs, confirms file uploads")
+    Container(mediaWorker, "Media processing worker", "Consumer", "Strips EXIF, generates 40 KB previews and renditions")
+
+    ContainerQueue(broker, "Message broker", "Kafka", "\"New post\" and \"media uploaded\" events")
+
+    ContainerDb(postsDb, "Posts DB", "PostgreSQL, RF=2", "Posts and locations, shard key user_id")
+    ContainerDb(commentsDb, "Comments DB", "PostgreSQL, RF=2", "Comments, shard key post_id")
+    ContainerDb(reactionsDb, "Reactions DB", "PostgreSQL, RF=2", "Reactions as source of truth, shard key post_id")
+    ContainerDb(subsDb, "Subscriptions DB", "PostgreSQL, RF=2", "Subscriptions by follower_id, reverse follower index by followee_id")
+    ContainerDb(usersDb, "Users DB", "PostgreSQL, RF=2", "Credentials and profiles")
+    ContainerDb(counters, "Counters cache", "Redis, RF=2", "Reaction, comment and follower counters")
+    ContainerDb(feedCache, "Feed cache", "Redis, RF=2", "Precomputed follower feeds: lists of post ids")
+    ContainerDb(storage, "Object storage", "S3-compatible, EC 4+2", "Original photos, previews and renditions")
+}
+
+Rel(traveler, mobile, "Uses")
+Rel(traveler, web, "Uses")
+
+Rel(mobile, lb, "Calls API", "HTTPS / JSON")
+Rel(web, lb, "Calls API", "HTTPS / JSON")
+Rel(lb, gateway, "Distributes requests")
+
+Rel(gateway, authService, "Sign-in, sign-up, token refresh")
+Rel(gateway, publicationsService, "Posts, comments, reactions, places")
+Rel(gateway, subsService, "Subscriptions and followers")
+Rel(gateway, feedService, "Feed requests")
+Rel(gateway, mediaService, "Media upload requests")
+
+Rel(authService, usersDb, "Reads and writes users", "SQL")
+
+Rel(publicationsService, postsDb, "Reads and writes posts and locations", "SQL")
+Rel(publicationsService, commentsDb, "Reads and writes comments", "SQL")
+Rel(publicationsService, reactionsDb, "Writes reactions in batches", "SQL")
+Rel(publicationsService, counters, "Increments and reads counters instead of UPDATE on the post row")
+Rel(publicationsService, broker, "Publishes \"new post\" event")
+
+Rel(subsService, subsDb, "Reads and writes subscriptions", "SQL")
+
+Rel(broker, feedWorker, "Delivers \"new post\" event")
+Rel(feedWorker, subsService, "Requests the author's followers")
+Rel(feedWorker, feedCache, "Writes post id into followers' feeds")
+Rel(feedService, feedCache, "Reads a feed page by cursor")
+Rel(feedService, publicationsService, "Fetches posts and counters by id list")
+
+Rel(mediaService, storage, "Creates object and issues presigned URL")
+Rel(mediaService, broker, "Publishes \"media uploaded\" event")
+Rel(mobile, storage, "Uploads file directly via presigned URL, bypassing the API", "HTTPS PUT")
+Rel(web, storage, "Uploads file directly via presigned URL, bypassing the API", "HTTPS PUT")
+Rel(broker, mediaWorker, "Delivers \"media uploaded\" event")
+Rel(mediaWorker, storage, "Reads original, writes previews and renditions")
+
+Rel(mobile, cdn, "Downloads previews and photos", "HTTPS")
+Rel(web, cdn, "Downloads previews and photos", "HTTPS")
+Rel(cdn, storage, "Origin pull on cache miss", "HTTPS")
+
+SHOW_LEGEND()
+@enduml
