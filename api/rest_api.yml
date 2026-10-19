@@ -1,0 +1,715 @@
+openapi: 3.0.3
+info:
+  title: Travel Social Network API
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+
+security:
+  - bearerAuth: []
+
+# ---------------- COMPONENTS ----------------
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    QueryLimit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 10
+        minimum: 1
+        maximum: 100
+    QueryCursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+
+    PathUserId:
+      name: user_id
+      in: path
+      required: true
+      schema: { type: string, example: "usr_12345" }
+    PathPostId:
+      name: post_id
+      in: path
+      required: true
+      schema: { type: string, example: "post_789" }
+    PathCommentId:
+      name: comment_id
+      in: path
+      required: true
+      schema: { type: string, example: "cmt_456" }
+
+  responses:
+    BadRequestError:
+      description: Bad Request (invalid input)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: "VALIDATION_ERROR"
+            message: "Field 'text' is required."
+
+    UnauthorizedError:
+      description: Unauthorized (invalid token or credentials)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: "UNAUTHORIZED"
+            message: "Invalid, missing or expired token."
+
+    NotFoundError:
+      description: Resource Not Found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: "NOT_FOUND"
+            message: "The requested resource was not found."
+
+    InternalServerError:
+      description: Internal Server Error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: "INTERNAL_ERROR"
+            message: "Internal service error, please retry later."
+
+    NoContent:
+      description: Success, no response body
+
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, example: "user@example.com" }
+        password: { type: string, example: "securepass123" }
+
+    TokenResponse:
+      type: object
+      required: [access_token, refresh_token]
+      properties:
+        access_token: { type: string }
+        refresh_token: { type: string }
+
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token: { type: string }
+
+    StandardStatusResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: "success"
+
+    UserCreateRequest:
+      type: object
+      required: [email, password, name]
+      properties:
+        email: { type: string, format: email, example: "user@example.com" }
+        password: { type: string, example: "securepass123" }
+        name: { type: string, example: "Alex Explorer" }
+
+    UserResponse:
+      type: object
+      required: [id, email, name]
+      properties:
+        id: { type: string, example: "usr_12345" }
+        email: { type: string, format: email, example: "user@example.com" }
+        name: { type: string, example: "Alex Explorer" }
+
+    UserPreviewResponse:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, example: "usr_12345" }
+        name: { type: string, example: "Alex Explorer" }
+        avatar_url: { type: string, format: uri, nullable: true }
+
+    UserListResponse:
+      type: object
+      required: [items, total_count, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/UserPreviewResponse' }
+        total_count: { type: integer, example: 1450 }
+        next_cursor: { type: string, nullable: true, example: "cursor_abc123" }
+
+    # ---- Media ----
+    MediaUploadRequest:
+      type: object
+      required: [content_type, size_bytes]
+      properties:
+        content_type:
+          type: string
+          enum: [image/jpeg, image/png, image/webp]
+          example: "image/jpeg"
+        size_bytes: { type: integer, example: 204800, maximum: 10485760 }
+
+    MediaUploadResponse:
+      type: object
+      required: [media_id, upload_url, expires_at]
+      properties:
+        media_id: { type: string, example: "med_abc123" }
+        upload_url:
+          type: string
+          format: uri
+          description: Presigned URL for a PUT request with the file body directly to object storage
+          example: "https://storage.example.com/upload/med_abc123?signature=..."
+        expires_at: { type: string, format: date-time }
+
+    # ---- Posts ----
+    PostCreateRequest:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string, example: "Just arrived in Bali! 🌴" }
+        media_ids:
+          type: array
+          maxItems: 10
+          items: { type: string }
+          example: ["med_abc123", "med_def456"]
+        place_tag: { type: string, example: "bali_indonesia" }
+
+    PostResponse:
+      type: object
+      required: [post_id, text, author_id, created_at, reactions_count, comments_count]
+      properties:
+        post_id: { type: string, example: "post_789" }
+        text: { type: string, example: "Just arrived in Bali! 🌴" }
+        images:
+          type: array
+          description: CDN links to uploaded media
+          items: { type: string, format: uri }
+          example: ["https://cdn.example.com/med_abc123.jpg"]
+        place_tag: { type: string, example: "bali_indonesia" }
+        author_id: { type: string, example: "usr_12345" }
+        created_at: { type: string, format: date-time }
+        reactions_count: { type: integer, example: 1450 }
+        comments_count: { type: integer, example: 37 }
+        my_reaction:
+          type: string
+          nullable: true
+          description: Current user's reaction to the post, null if none
+          example: "like"
+
+    PostUpdateRequest:
+      type: object
+      properties:
+        text: { type: string, example: "Updated text about Bali!" }
+        media_ids:
+          type: array
+          maxItems: 10
+          items: { type: string }
+        place_tag: { type: string, example: "bali_indonesia" }
+
+    # ---- Comments ----
+    CommentCreateRequest:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string, example: "Amazing view! Enjoy your trip." }
+        media_ids:
+          type: array
+          maxItems: 1
+          items: { type: string }
+          example: ["med_ghi789"]
+
+    CommentResponse:
+      type: object
+      required: [comment_id, post_id, text, author_id, created_at]
+      properties:
+        comment_id: { type: string, example: "cmt_456" }
+        post_id: { type: string, example: "post_789" }
+        text: { type: string, example: "Amazing view! Enjoy your trip." }
+        images:
+          type: array
+          items: { type: string, format: uri }
+        author_id: { type: string, example: "usr_999" }
+        created_at: { type: string, format: date-time }
+
+    # ---- Reactions ----
+    ReactionRequest:
+      type: object
+      required: [type]
+      properties:
+        type: { type: string, example: "like" }
+
+    ReactionResponse:
+      type: object
+      required: [user, type, created_at]
+      properties:
+        user: { $ref: '#/components/schemas/UserPreviewResponse' }
+        type: { type: string, example: "like" }
+        created_at: { type: string, format: date-time }
+
+    ReactionListResponse:
+      type: object
+      required: [items, total_count, counts_by_type, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ReactionResponse' }
+        total_count: { type: integer, example: 1450 }
+        counts_by_type:
+          type: object
+          additionalProperties: { type: integer }
+          example: { like: 1200, love: 250 }
+        next_cursor: { type: string, nullable: true, example: "cursor_abc123" }
+
+    # ---- Places ----
+    PlaceResponse:
+      type: object
+      required: [tag, post_count, reactions_count]
+      properties:
+        tag: { type: string, example: "paris_france" }
+        post_count: { type: integer, example: 1450 }
+        reactions_count: { type: integer, example: 98500 }
+
+    PlaceListResponse:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/PlaceResponse' }
+        next_cursor: { type: string, nullable: true, example: "cursor_ghi789" }
+
+    FeedResponse:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/PostResponse' }
+        next_cursor: { type: string, nullable: true, example: "cursor_abc123" }
+
+    CommentListResponse:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/CommentResponse' }
+        next_cursor: { type: string, nullable: true, example: "cursor_def456" }
+
+tags:
+  - name: Auth
+  - name: Users
+  - name: Media
+  - name: Posts
+  - name: Comments
+  - name: Reactions
+  - name: Subscriptions
+  - name: Feed
+  - name: Places
+
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        "200":
+          description: Signed in successfully
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenResponse' }
+        "400": { $ref: '#/components/responses/BadRequestError' }
+        "401": { $ref: '#/components/responses/UnauthorizedError' }
+        "500": { $ref: '#/components/responses/InternalServerError' }
+
+  /auth/register:
+    post:
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UserCreateRequest' }
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserResponse' }
+        "400": { $ref: '#/components/responses/BadRequestError' }
+        "500": { $ref: '#/components/responses/InternalServerError' }
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefreshRequest' }
+      responses:
+        "200":
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [access_token]
+                properties:
+                  access_token: { type: string }
+        "401": { $ref: '#/components/responses/UnauthorizedError' }
+        "500": { $ref: '#/components/responses/InternalServerError' }
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      responses:
+        "204": { $ref: '#/components/responses/NoContent' }
+        "401": { $ref: '#/components/responses/UnauthorizedError' }
+        "500": { $ref: '#/components/responses/InternalServerError' }
+
+  /users/{user_id}:
+    parameters:
+      - $ref: '#/components/parameters/PathUserId'
+    get:
+      tags: [Users]
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserResponse' }
+        "401": { $ref: '#/components/responses/UnauthorizedError' }
+        "404": { $ref: '#/components/responses/NotFoundError' }
+        "500": { $ref: '#/components/responses/InternalServerError' }
+
+  /users/{user_id}/subscriptions:
+    parameters:
+      - $ref: '#/components/parameters/PathUserId'
+    get:
+      tags: [Subscriptions]
+      description: Users this user follows. Paginated; the count is returned in total_count.
+      parameters:
+        - $ref: '#/components/parameters/QueryLimit'
+        - $ref: '#/components/parameters/QueryCursor'
+      responses:
+        "200":
+          description: Subscriptions list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserListResponse' }
+        "401": { $ref: '#/components/responses/UnauthorizedError' }
+        "404": { $ref: '#/components/responses/NotFoundError' }
+        "500": { $ref: '#/components/responses/InternalServerError' }
+
+  /users/{user_id}/followers:
+    parameters:
+      - $ref: '#/components/parameters/PathUserId'
+    get:
+      tags: [Subscriptions]
+      description: Users following this user. Paginated; the count is returned in total_count.
+      parameters:
+        - $ref: '#/components/parameters/QueryLimit'
+        - $ref: '#/components/parameters/QueryCursor'
+      responses:
+        "200":
+          description: Followers list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserListResponse' }
+        "401": { $ref: '#/components/responses/UnauthorizedError' }
+        "404": { $ref: '#/components/responses/NotFoundError' }
+        "500": { $ref: '#/components/responses/InternalServerError' }
+
+  /media:
+    post:
+      tags: [Media]
+      description: >
+        Creates a media object and returns a presigned URL. The client uploads the file bytes
+        with a separate PUT directly to object storage, bypassing the API. The returned
+        media_id is then passed in media_ids of a post or comment.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MediaUploadRequest' }
+      responses:
+        "201":
+          description: Upload URL issued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MediaUploadResponse' }
+        "400": { $ref: '#/components/responses/BadRequestError' }
+        "401": { $ref: '#/components/responses/UnauthorizedError' }
+        "500": { $ref: '#/components/responses/InternalServerError' }
+
+  /posts:
+    post:
+      tags: [Posts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PostCreateRequest' }
+      responses:
+        "201":
+          description: Post created (Full Entity)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PostResponse' }
+        "400": { $ref: '#/components/responses/BadRequestError' }
+        "401": { $ref: '#/components/responses/UnauthorizedError' }
+        "500": { $ref: '#/components/responses/InternalServerError' }
+
+  /posts/{post_id}:
+    parameters:
+      - $ref: '#/components/parameters/PathPostId'
+    get:
+      tags: [Posts]
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PostResponse' }
+        "401": { $ref: '#/components/responses/UnauthorizedError' }
+        "404": { $ref: '#/components/responses/NotFoundError' }
+        "500": { $ref: '#/components/responses/InternalServerError' }
+    put:
+      tags: [Posts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PostUpdateRequest' }
+      responses:
+        "200":
+          description: Post updated (Full Entity)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PostResponse' }
+        "400": { $ref: '#/components/responses/BadRequestError' }
+        "401": { $ref: '#/components/responses/UnauthorizedError' }
+        "404": { $ref: '#/components/responses/NotFoundError' }
+        "500": { $ref: '#/components/responses/InternalServerError' }
+    delete:
+      tags: [Posts]
+      responses:
+        "204": { $ref: '#/components/responses/NoContent' }
+        "401": { $ref: '#/components/responses/UnauthorizedError' }
+        "404": { $ref: '#/components/responses/NotFoundError' }
+        "500": { $ref: '#/components/responses/InternalServerError' }
+
+  /posts/{post_id}/comments:
+    parameters:
+      - $ref: '#/components/parameters/PathPostId'
+    post:
+      tags: [Comments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommentCreateRequest' }
+      responses:
+        "201":
+          description: Comment created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommentResponse' }
+        "400": { $ref: '#/components/responses/BadRequestError' }
+        "401": { $ref: '#/components/responses/UnauthorizedError' }
+        "404": { $ref: '#/components/responses/NotFoundError' }
+        "500": { $ref: '#/components/responses/InternalServerError' }
+    get:
+      tags: [Comments]
+      parameters:
+        - $ref: '#/components/parameters/QueryLimit'
+        - $ref: '#/components/parameters/QueryCursor'
+      responses:
+        "200":
+          description: Comments list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommentListResponse' }
+        "401": { $ref: '#/components/responses/UnauthorizedError' }
+        "404": { $ref: '#/components/responses/NotFoundError' }
+        "500": { $ref: '#/components/responses/InternalServerError' }
+
+  /posts/{post_id}/comments/{comment_id}:
+    parameters:
+      - $ref: '#/components/parameters/PathPostId'
+      - $ref: '#/components/parameters/PathCommentId'
+    put:
+      tags: [Comments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommentCreateRequest' }
+      responses:
+        "200":
+          description: Comment updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommentResponse' }
+        "400": { $ref: '#/components/responses/BadRequestError' }
+        "401": { $ref: '#/components/responses/UnauthorizedError' }
+        "404": { $ref: '#/components/responses/NotFoundError' }
+        "500": { $ref: '#/components/responses/InternalServerError' }
+    delete:
+      tags: [Comments]
+      responses:
+        "204": { $ref: '#/components/responses/NoContent' }
+        "401": { $ref: '#/components/responses/UnauthorizedError' }
+        "404": { $ref: '#/components/responses/NotFoundError' }
+        "500": { $ref: '#/components/responses/InternalServerError' }
+
+  /posts/{post_id}/reactions:
+    parameters:
+      - $ref: '#/components/parameters/PathPostId'
+    get:
+      tags: [Reactions]
+      description: >
+        Who reacted to the post. The list is paginated: a popular post
+        has tens of thousands of reactions, so they are never fetched in full. The feed only needs
+        reactions_count and my_reaction right in PostResponse; this endpoint is needed
+        only when the reactions list is opened.
+      parameters:
+        - $ref: '#/components/parameters/QueryLimit'
+        - $ref: '#/components/parameters/QueryCursor'
+      responses:
+        "200":
+          description: Reactions list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReactionListResponse' }
+        "401": { $ref: '#/components/responses/UnauthorizedError' }
+        "404": { $ref: '#/components/responses/NotFoundError' }
+        "500": { $ref: '#/components/responses/InternalServerError' }
+    post:
+      tags: [Reactions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReactionRequest' }
+      responses:
+        "200":
+          description: Reaction added/updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StandardStatusResponse' }
+        "400": { $ref: '#/components/responses/BadRequestError' }
+        "401": { $ref: '#/components/responses/UnauthorizedError' }
+        "404": { $ref: '#/components/responses/NotFoundError' }
+        "500": { $ref: '#/components/responses/InternalServerError' }
+    delete:
+      tags: [Reactions]
+      responses:
+        "204": { $ref: '#/components/responses/NoContent' }
+        "401": { $ref: '#/components/responses/UnauthorizedError' }
+        "404": { $ref: '#/components/responses/NotFoundError' }
+        "500": { $ref: '#/components/responses/InternalServerError' }
+
+  /subscriptions/{target_user_id}:
+    parameters:
+      - name: target_user_id
+        in: path
+        required: true
+        schema: { type: string, example: "usr_999" }
+    post:
+      tags: [Subscriptions]
+      responses:
+        "200":
+          description: Subscribed successfully
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StandardStatusResponse' }
+        "401": { $ref: '#/components/responses/UnauthorizedError' }
+        "404": { $ref: '#/components/responses/NotFoundError' }
+        "500": { $ref: '#/components/responses/InternalServerError' }
+    delete:
+      tags: [Subscriptions]
+      responses:
+        "204": { $ref: '#/components/responses/NoContent' }
+        "401": { $ref: '#/components/responses/UnauthorizedError' }
+        "404": { $ref: '#/components/responses/NotFoundError' }
+        "500": { $ref: '#/components/responses/InternalServerError' }
+
+  /feed:
+    get:
+      tags: [Feed]
+      parameters:
+        - name: subscription_only
+          in: query
+          schema: { type: boolean, example: true }
+        - name: place_tag
+          in: query
+          schema: { type: string, example: "bali_indonesia" }
+        - $ref: '#/components/parameters/QueryLimit'
+        - $ref: '#/components/parameters/QueryCursor'
+      responses:
+        "200":
+          description: Posts feed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FeedResponse' }
+        "401": { $ref: '#/components/responses/UnauthorizedError' }
+        "500": { $ref: '#/components/responses/InternalServerError' }
+
+  /places:
+    get:
+      tags: [Places]
+      description: >
+        Places collection. Popularity is a sort order, not a separate
+        resource, so it is set via the sort parameter rather than a path suffix.
+      parameters:
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [reactions_count, post_count, created_at]
+            default: reactions_count
+        - $ref: '#/components/parameters/QueryLimit'
+        - $ref: '#/components/parameters/QueryCursor'
+      responses:
+        "200":
+          description: Places list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlaceListResponse' }
+        "400": { $ref: '#/components/responses/BadRequestError' }
+        "401": { $ref: '#/components/responses/UnauthorizedError' }
+        "500": { $ref: '#/components/responses/InternalServerError' }
